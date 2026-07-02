@@ -1,623 +1,1039 @@
 import { useState, useRef, useEffect, Suspense } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
-import { useGLTF, Environment, Float } from '@react-three/drei'
+import { Canvas } from '@react-three/fiber'
+import { PerformanceMonitor, AdaptiveDpr } from '@react-three/drei'
 import { motion, AnimatePresence } from 'framer-motion'
-import * as THREE from 'three'
+import Cursor from './components/Cursor'
+import CorridorScene from './scenes/CorridorScene'
+import WorkshopScene from './scenes/WorkshopScene'
+import GaneshaModel from './components/GaneshaModel'
+import MandirModel from './components/MandirModel'
+import WallPanel from './components/WallPanel'
+import ColumnModel from './components/ColumnModel'
+import { useMouse } from './hooks/useMouse'
+import { useScrollProgress } from './hooks/useScrollProgress'
 
-// ── SUPABASE MODEL URLS ──────────────────────────────────
-const BASE = 'https://uozvukypycqqrdelndhr.supabase.co/storage/v1/object/public/models/'
-const URLS = {
-  radhakrishna:   BASE + 'lord_krishna_and_radha.glb',
-  ganesha:        BASE + 'lord_ganesha_statue_3d_scanned.glb',
-  buddha:         BASE + 'meditating_buddha.glb',
-  fountain:       BASE + 'simple_marble_fountain.glb',
-  wall:           BASE + 'wall.glb',
-  krishna:        BASE + 'lord_krishna_3d_model.glb',
-  elephant:       BASE + 'dharmasthala_-_bahubali_elephant.glb',
-  mural:          BASE + 'pintura_mural_al_fresc_-_mnat_45096-2.glb',
-  krishnaSitting: BASE + 'bhagwan_krishna_sitting.glb',
+// ─── STYLES ──────────────────────────────────────────────
+const S = {
+  // Layout
+  fixed: { position: 'fixed', inset: 0 },
+  fullscreen: { width: '100%', height: '100vh' },
+
+  // Colors
+  cream: '#FAF6F0',
+  cream2: '#F2EAE0',
+  sand: '#E8D9C4',
+  gold: '#C4A057',
+  charcoal: '#1C1612',
+  muted: '#9A8A78',
+  brown: '#6B5A45',
+
+  // Text styles
+  eyebrow: {
+    fontSize: 10,
+    fontWeight: 700,
+    letterSpacing: '0.25em',
+    textTransform: 'uppercase',
+    color: '#C4A057',
+    marginBottom: 16,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+  },
+  heading: {
+    fontFamily: "'Cormorant Garamond', serif",
+    fontSize: 'clamp(38px, 4.5vw, 58px)',
+    fontWeight: 300,
+    lineHeight: 1.1,
+    color: '#1C1612',
+    marginBottom: 20,
+  },
+  sub: {
+    fontSize: 13,
+    fontWeight: 300,
+    color: '#9A8A78',
+    lineHeight: 1.9,
+    maxWidth: 480,
+  },
 }
-Object.values(URLS).forEach(u => useGLTF.preload(u))
 
-// ── COLORS ───────────────────────────────────────────────
-const GOLD   = '#C4A057'
-const SAND   = '#E8D5B0'
-const CREAM  = '#F5F0E8'
-const SHADOW = '#1C1208'
-
-// ── SCROLL WORLDS ─────────────────────────────────────────
-// Each world: [startProgress, endProgress]
-const WORLDS = {
-  landing:      [0.00, 0.08],
-  radhakrishna: [0.08, 0.25],
-  wall:         [0.25, 0.40],
-  ganesha:      [0.40, 0.53],
-  buddha:       [0.53, 0.65],
-  fountain:     [0.65, 0.76],
-  workshop:     [0.76, 0.88],
-  signature:    [0.88, 1.00],
+// ─── DEMO BANNER ─────────────────────────────────────────
+function DemoBanner() {
+  return (
+    <div style={{
+      position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+      background: '#C4A057', color: '#1C1612',
+      textAlign: 'center', padding: '7px 20px',
+      fontSize: 10, fontWeight: 700, letterSpacing: '0.2em',
+      textTransform: 'uppercase',
+    }}>
+      ✦ Website Preview — Built by Production X — productionx.in
+    </div>
+  )
 }
 
-function inWorld(p, world) {
-  const [s, e] = WORLDS[world]
-  return p >= s && p <= e
+// ─── PROLOGUE ────────────────────────────────────────────
+function Prologue({ onEnter }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.8 }}
+      style={{
+        ...S.fixed,
+        background: '#0D0A06',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'column',
+        zIndex: 500,
+        padding: 40,
+        textAlign: 'center',
+      }}
+    >
+      {/* Breathing amber glow */}
+      <motion.div
+        animate={{ scale: [1, 1.15, 1], opacity: [0.6, 1, 0.6] }}
+        transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+        style={{
+          width: 130, height: 130,
+          borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(196,160,87,0.45) 0%, transparent 70%)',
+          margin: '0 auto 50px',
+          boxShadow: '0 0 60px rgba(196,160,87,0.2)',
+        }}
+      />
+
+      <motion.h1
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.5, duration: 1.2 }}
+        style={{
+          fontFamily: "'Cormorant Garamond', serif",
+          fontSize: 'clamp(28px, 4vw, 52px)',
+          fontWeight: 300,
+          color: '#FAF6F0',
+          lineHeight: 1.3,
+          marginBottom: 20,
+          letterSpacing: '0.02em',
+        }}
+      >
+        Some things are not made.<br />
+        <em style={{ color: '#C4A057' }}>They are revealed.</em>
+      </motion.h1>
+
+      <motion.p
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 1, duration: 1 }}
+        style={{
+          fontSize: 11, fontWeight: 300,
+          color: '#6B5A45', letterSpacing: '0.2em',
+          textTransform: 'uppercase', marginBottom: 52,
+        }}
+      >
+        Utsav Stone Art · Kokapet, Hyderabad
+      </motion.p>
+
+      <motion.button
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 1.5, duration: 0.8 }}
+        whileHover={{ scale: 1.03 }}
+        onClick={onEnter}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 14,
+          padding: '16px 44px',
+          border: '1px solid rgba(196,160,87,0.4)',
+          background: 'transparent', color: '#C4A057',
+          fontFamily: "'Montserrat', sans-serif",
+          fontSize: 11, fontWeight: 500, letterSpacing: '0.2em',
+          textTransform: 'uppercase', cursor: 'none',
+        }}
+      >
+        <motion.span
+          animate={{ opacity: [1, 0.3, 1] }}
+          transition={{ duration: 2, repeat: Infinity }}
+          style={{ width: 6, height: 6, borderRadius: '50%', background: '#C4A057' }}
+        />
+        Enter The Stone
+      </motion.button>
+    </motion.div>
+  )
 }
 
-function worldOpacity(p, world, fadeIn = 0.03, fadeOut = 0.03) {
-  const [s, e] = WORLDS[world]
-  if (p < s) return 0
-  if (p > e) return 0
-  const fi = Math.min(1, (p - s) / fadeIn)
-  const fo = Math.min(1, (e - p) / fadeOut)
-  return Math.min(fi, fo)
-}
-
-// ── CUSTOM CURSOR ─────────────────────────────────────────
-function Cursor() {
-  const dotRef  = useRef()
-  const ringRef = useRef()
-  const pos     = useRef({ x: -100, y: -100 })
-  const ring    = useRef({ x: -100, y: -100 })
+// ─── CRACK SCREEN ────────────────────────────────────────
+function CrackScreen({ onShatter }) {
+  const canvasRef = useRef()
+  const lastPos = useRef({ x: -1, y: -1 })
+  const cracked = useRef(false)
 
   useEffect(() => {
-    const onMove = e => { pos.current = { x: e.clientX, y: e.clientY } }
-    window.addEventListener('mousemove', onMove)
-    let raf
-    const tick = () => {
-      ring.current.x += (pos.current.x - ring.current.x) * 0.1
-      ring.current.y += (pos.current.y - ring.current.y) * 0.1
-      if (dotRef.current)
-        dotRef.current.style.transform = `translate(${pos.current.x - 4}px,${pos.current.y - 4}px)`
-      if (ringRef.current)
-        ringRef.current.style.transform = `translate(${ring.current.x - 18}px,${ring.current.y - 18}px)`
-      raf = requestAnimationFrame(tick)
+    const canvas = canvasRef.current
+    if (!canvas) return
+    canvas.width = window.innerWidth
+    canvas.height = window.innerHeight
+    const ctx = canvas.getContext('2d')
+    drawStone(ctx, canvas.width, canvas.height)
+
+    const onMove = (e) => {
+      if (cracked.current) return
+      const { clientX: x, clientY: y } = e.touches ? e.touches[0] : e
+      if (lastPos.current.x < 0) { lastPos.current = { x, y }; return }
+      drawCracks(ctx, lastPos.current.x, lastPos.current.y, x, y)
+      lastPos.current = { x, y }
     }
-    raf = requestAnimationFrame(tick)
-    return () => { window.removeEventListener('mousemove', onMove); cancelAnimationFrame(raf) }
-  }, [])
 
-  return (
-    <>
-      <div ref={dotRef}  style={{ position:'fixed', width:8,  height:8,  background:GOLD, borderRadius:'50%', pointerEvents:'none', zIndex:99999, willChange:'transform' }} />
-      <div ref={ringRef} style={{ position:'fixed', width:36, height:36, border:`1.5px solid ${GOLD}`, borderRadius:'50%', pointerEvents:'none', zIndex:99998, opacity:0.55, willChange:'transform', transition:'opacity 0.3s' }} />
-    </>
-  )
-}
-
-// ── GOLD PARTICLES ────────────────────────────────────────
-function GoldParticles({ count = 350 }) {
-  const ref    = useRef()
-  const speeds = useRef([])
-  const data   = useRef(null)
-
-  if (!data.current) {
-    const pos = new Float32Array(count * 3)
-    speeds.current = []
-    for (let i = 0; i < count; i++) {
-      pos[i*3]   = (Math.random()-0.5) * 14
-      pos[i*3+1] = (Math.random()-0.5) * 10
-      pos[i*3+2] = (Math.random()-0.5) * 8
-      speeds.current.push(0.004 + Math.random() * 0.006)
+    const onClick = () => {
+      if (cracked.current) return
+      cracked.current = true
+      shatter(ctx, canvas.width, canvas.height, onShatter)
     }
-    data.current = pos
-  }
 
-  useFrame(() => {
-    if (!ref.current) return
-    const arr = ref.current.geometry.attributes.position.array
-    for (let i = 0; i < count; i++) {
-      arr[i*3+1] += speeds.current[i]
-      if (arr[i*3+1] > 5) arr[i*3+1] = -5
+    canvas.addEventListener('mousemove', onMove)
+    canvas.addEventListener('click', onClick)
+    canvas.addEventListener('touchmove', onMove, { passive: true })
+    canvas.addEventListener('touchend', onClick)
+
+    return () => {
+      canvas.removeEventListener('mousemove', onMove)
+      canvas.removeEventListener('click', onClick)
     }
-    ref.current.geometry.attributes.position.needsUpdate = true
-  })
+  }, [onShatter])
 
-  return (
-    <points ref={ref}>
-      <bufferGeometry>
-        <bufferAttribute attach="attributes-position" count={count} array={data.current} itemSize={3} />
-      </bufferGeometry>
-      <pointsMaterial color={GOLD} size={0.028} transparent opacity={0.6} sizeAttenuation />
-    </points>
-  )
-}
+  function drawStone(ctx, w, h) {
+    // Warm sandstone gradient
+    const grad = ctx.createLinearGradient(0, 0, w, h)
+    grad.addColorStop(0, '#E8D9C4')
+    grad.addColorStop(0.4, '#D4C4A8')
+    grad.addColorStop(0.7, '#C8B898')
+    grad.addColorStop(1, '#D4C4A8')
+    ctx.fillStyle = grad
+    ctx.fillRect(0, 0, w, h)
 
-// ── CURSOR LIGHT ──────────────────────────────────────────
-function CursorLight({ mouseRef }) {
-  const lightRef = useRef()
-  useFrame(() => {
-    if (!lightRef.current || !mouseRef.current) return
-    lightRef.current.position.set(mouseRef.current.nx * 4, mouseRef.current.ny * 3, 3.5)
-  })
-  return <pointLight ref={lightRef} color={GOLD} intensity={2.5} distance={10} />
-}
-
-// ── MODEL LOADER (safe) ───────────────────────────────────
-function SafeModel({ url, scale = 1, position = [0,0,0], rotation = [0,0,0], opacity = 1, mouseRef, autoRotate = false }) {
-  const { scene } = useGLTF(url)
-  const groupRef  = useRef()
-  const clone     = scene.clone(true)
-
-  // Apply stone material tint + transparency
-  clone.traverse(obj => {
-    if (obj.isMesh) {
-      obj.castShadow    = true
-      obj.receiveShadow = true
-      if (obj.material) {
-        obj.material = obj.material.clone()
-        obj.material.transparent = true
-        obj.material.opacity = opacity
-      }
-    }
-  })
-
-  useFrame((state) => {
-    if (!groupRef.current) return
-    const t = state.clock.elapsedTime
-    if (autoRotate) {
-      groupRef.current.rotation.y = t * 0.18
-    } else if (mouseRef?.current) {
-      groupRef.current.rotation.y += (mouseRef.current.nx * 0.5 - groupRef.current.rotation.y) * 0.04
-      groupRef.current.rotation.x += (mouseRef.current.ny * 0.2 - groupRef.current.rotation.x) * 0.04
-    }
-    // Subtle float
-    groupRef.current.position.y = position[1] + Math.sin(t * 0.5) * 0.06
-  })
-
-  return (
-    <group ref={groupRef} position={position} rotation={rotation} scale={scale}>
-      <primitive object={clone} />
-    </group>
-  )
-}
-
-// ── STONE LANDING SURFACE ─────────────────────────────────
-function StoneSurface({ mouseRef, opacity = 1 }) {
-  const meshRef   = useRef()
-  const lightRef  = useRef()
-
-  // Procedural stone texture
-  const texture = useRef(null)
-  if (!texture.current) {
-    const c = document.createElement('canvas')
-    c.width = c.height = 512
-    const ctx = c.getContext('2d')
-    ctx.fillStyle = SAND
-    ctx.fillRect(0,0,512,512)
-    for (let i = 0; i < 180; i++) {
-      const x = Math.random()*512, y = Math.random()*512
-      const len = 10 + Math.random()*60
-      const angle = Math.random()*Math.PI*2
+    // Stone grain
+    for (let i = 0; i < 200; i++) {
+      const x = Math.random() * w, y = Math.random() * h
+      const len = 15 + Math.random() * 70
+      const angle = Math.random() * Math.PI * 2
       ctx.beginPath()
-      ctx.moveTo(x,y)
-      ctx.lineTo(x+Math.cos(angle)*len, y+Math.sin(angle)*len)
+      ctx.moveTo(x, y)
+      ctx.lineTo(x + Math.cos(angle) * len, y + Math.sin(angle) * len)
       ctx.strokeStyle = '#8C7A5E'
-      ctx.lineWidth = 0.5+Math.random()*1.5
-      ctx.globalAlpha = 0.03+Math.random()*0.07
+      ctx.lineWidth = 0.5 + Math.random() * 1.5
+      ctx.globalAlpha = 0.03 + Math.random() * 0.07
       ctx.stroke()
     }
     ctx.globalAlpha = 1
-    // Veins
-    for (let i = 0; i < 8; i++) {
+
+    // Stone veins
+    for (let i = 0; i < 10; i++) {
       ctx.beginPath()
-      let vx = Math.random()*512
+      let vx = Math.random() * w
       ctx.moveTo(vx, 0)
-      for (let j=0;j<14;j++){vx+=(Math.random()-0.5)*50;ctx.lineTo(vx,j*36.5)}
-      ctx.strokeStyle='#9A8A6E'; ctx.lineWidth=0.8; ctx.globalAlpha=0.04+Math.random()*0.04; ctx.stroke()
+      for (let j = 0; j < 15; j++) {
+        vx += (Math.random() - 0.5) * 50
+        ctx.lineTo(vx, (j / 15) * h)
+      }
+      ctx.strokeStyle = '#9A8A6E'
+      ctx.lineWidth = 0.8
+      ctx.globalAlpha = 0.04 + Math.random() * 0.05
+      ctx.stroke()
     }
-    ctx.globalAlpha=1
-    texture.current = new THREE.CanvasTexture(c)
+    ctx.globalAlpha = 1
+
+    // Vignette
+    const vig = ctx.createRadialGradient(w / 2, h / 2, h * 0.2, w / 2, h / 2, h * 0.85)
+    vig.addColorStop(0, 'rgba(0,0,0,0)')
+    vig.addColorStop(1, 'rgba(28,22,18,0.5)')
+    ctx.fillStyle = vig
+    ctx.fillRect(0, 0, w, h)
   }
 
-  useFrame(() => {
-    if (!lightRef.current || !mouseRef.current) return
-    lightRef.current.position.set(mouseRef.current.nx*3, mouseRef.current.ny*2, 2)
-  })
+  function drawCracks(ctx, x1, y1, x2, y2) {
+    // Main crack
+    ctx.save()
+    ctx.shadowBlur = 10
+    ctx.shadowColor = 'rgba(196,160,87,0.9)'
+    ctx.strokeStyle = 'rgba(196,160,87,0.95)'
+    ctx.lineWidth = 1.5
+    ctx.beginPath()
+    ctx.moveTo(x1, y1)
+    const cpx1 = x1 + (x2 - x1) * 0.33 + (Math.random() - 0.5) * 12
+    const cpy1 = y1 + (y2 - y1) * 0.33 + (Math.random() - 0.5) * 12
+    const cpx2 = x1 + (x2 - x1) * 0.66 + (Math.random() - 0.5) * 12
+    const cpy2 = y1 + (y2 - y1) * 0.66 + (Math.random() - 0.5) * 12
+    ctx.bezierCurveTo(cpx1, cpy1, cpx2, cpy2, x2, y2)
+    ctx.stroke()
+    ctx.restore()
+
+    // Outer glow
+    ctx.save()
+    ctx.strokeStyle = 'rgba(255,220,120,0.25)'
+    ctx.lineWidth = 5
+    ctx.beginPath()
+    ctx.moveTo(x1, y1)
+    ctx.bezierCurveTo(cpx1, cpy1, cpx2, cpy2, x2, y2)
+    ctx.stroke()
+    ctx.restore()
+
+    // Branch cracks
+    if (Math.random() < 0.4) {
+      const angle = Math.atan2(y2 - y1, x2 - x1) + (Math.PI / 4) * (Math.random() < 0.5 ? 1 : -1)
+      const len = 12 + Math.random() * 35
+      ctx.save()
+      ctx.strokeStyle = 'rgba(196,160,87,0.55)'
+      ctx.lineWidth = 0.8
+      ctx.shadowBlur = 5
+      ctx.shadowColor = 'rgba(196,160,87,0.5)'
+      ctx.beginPath()
+      ctx.moveTo(x2, y2)
+      ctx.lineTo(x2 + Math.cos(angle) * len, y2 + Math.sin(angle) * len)
+      ctx.stroke()
+      ctx.restore()
+    }
+  }
+
+  function shatter(ctx, w, h, callback) {
+    let alpha = 0
+    const interval = setInterval(() => {
+      alpha += 0.07
+      const grd = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h))
+      grd.addColorStop(0, `rgba(255,248,235,${Math.min(alpha, 1)})`)
+      grd.addColorStop(0.4, `rgba(240,225,200,${Math.min(alpha * 0.85, 0.85)})`)
+      grd.addColorStop(1, `rgba(250,246,240,${Math.min(alpha, 1)})`)
+      ctx.fillStyle = grd
+      ctx.fillRect(0, 0, w, h)
+      if (alpha >= 1.3) {
+        clearInterval(interval)
+        setTimeout(callback, 150)
+      }
+    }, 16)
+  }
 
   return (
-    <group>
-      <mesh ref={meshRef} position={[0,0,-0.5]}>
-        <planeGeometry args={[14, 10]} />
-        <meshStandardMaterial map={texture.current} roughness={0.72} metalness={0} transparent opacity={opacity} />
-      </mesh>
-      <pointLight ref={lightRef} color={GOLD} intensity={3} distance={8} />
-    </group>
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.6 }}
+      style={{ ...S.fixed, zIndex: 400 }}
+    >
+      <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.5 }}
+        style={{
+          position: 'absolute', bottom: 60, left: '50%',
+          transform: 'translateX(-50%)',
+          fontSize: 10, fontWeight: 600,
+          letterSpacing: '0.22em', textTransform: 'uppercase',
+          color: '#6B5A45', textAlign: 'center',
+          pointerEvents: 'none',
+        }}
+      >
+        Move your cursor to carve ·{' '}
+        <span style={{ color: '#C4A057' }}>Click to enter</span>
+      </motion.div>
+    </motion.div>
   )
 }
 
-// ── SIGNATURE CARVING ─────────────────────────────────────
-function SignatureText({ scrollProgress }) {
-  const [s, e] = WORLDS.signature
-  const local  = Math.max(0, Math.min(1, (scrollProgress - s) / (e - s)))
-  const letters = 'UTSAV STONE ART'.split('')
-  const perLetter = 1 / letters.length
-
+// ─── 3D CANVAS (Corridor Journey) ────────────────────────
+function JourneyCanvas({ scrollProgress, mouseRef }) {
   return (
-    <group position={[0, 0, 0]}>
-      {/* Stone bg */}
-      <mesh position={[0,0,-0.3]}>
-        <planeGeometry args={[14,10]} />
-        <meshStandardMaterial color={SHADOW} roughness={0.9} />
-      </mesh>
-      {letters.map((ch, i) => {
-        const progress = Math.max(0, Math.min(1, (local - i * perLetter) / perLetter))
-        const depth    = progress * 0.3
-        const emissive = progress * 0.4
-        if (ch === ' ') return null
-        const x = (i - 7) * 0.85
-        return (
-          <mesh key={i} position={[x, 0, depth]}>
-            <boxGeometry args={[0.6, 0.8, depth + 0.01]} />
-            <meshStandardMaterial
-              color={CREAM}
-              emissive={GOLD}
-              emissiveIntensity={emissive}
-              roughness={0.3}
-              metalness={0.1}
-            />
-          </mesh>
-        )
-      })}
-    </group>
+    <div style={{ ...S.fixed, zIndex: 1 }}>
+      <Canvas
+        shadows
+        camera={{ fov: 60, near: 0.1, far: 100, position: [0, 0.3, 18] }}
+        gl={{ antialias: true, alpha: false }}
+        style={{ background: '#FAF6F0' }}
+      >
+        <AdaptiveDpr pixelated />
+        <PerformanceMonitor />
+        <Suspense fallback={null}>
+          <CorridorScene scrollProgress={scrollProgress} mouseRef={mouseRef} />
+        </Suspense>
+      </Canvas>
+    </div>
   )
 }
 
-// ── MAIN 3D SCENE ─────────────────────────────────────────
-function Scene({ scrollProgress, mouseRef }) {
-  // Smooth scroll ref
-  const smoothP = useRef(0)
-
-  useFrame(({ camera }) => {
-    smoothP.current += (scrollProgress - smoothP.current) * 0.06
-    const p = smoothP.current
-
-    // Camera path
-    let camZ = 6, camY = 0.5, camX = 0
-    if (p < 0.08)       { camZ = 6;   camY = 0.5; camX = 0 }
-    else if (p < 0.25)  { camZ = 5;   camY = 0;   camX = 0 }
-    else if (p < 0.40)  { camZ = 5;   camY = 0;   camX = -0.5 }
-    else if (p < 0.53)  { camZ = 4.5; camY = 0;   camX = 0 }
-    else if (p < 0.65)  { camZ = 5.5; camY = -0.3;camX = 0 }
-    else if (p < 0.76)  { camZ = 6;   camY = 1;   camX = 0 }
-    else if (p < 0.88)  { camZ = 4;   camY = 0;   camX = 0 }
-    else                { camZ = 3.5; camY = 0;   camX = 0 }
-
-    camera.position.x += (camX - camera.position.x) * 0.04
-    camera.position.y += (camY - camera.position.y) * 0.04
-    camera.position.z += (camZ - camera.position.z) * 0.04
-    camera.lookAt(0, 0, 0)
-  })
-
-  const p = scrollProgress
+// ─── SCROLL OVERLAY TEXT ──────────────────────────────────
+function ScrollOverlays({ scrollProgress }) {
+  // Text appears based on scroll zones
+  const inCorridor = scrollProgress > 0.08 && scrollProgress < 0.45
+  const inHall = scrollProgress > 0.45 && scrollProgress < 0.65
+  const showDoors = scrollProgress > 0.5 && scrollProgress < 0.65
 
   return (
     <>
-      <Environment preset="apartment" />
-      <ambientLight color="#FFF8F0" intensity={0.4} />
-      <directionalLight color="#FFF5D0" intensity={0.8} position={[3,6,4]} castShadow />
-      <CursorLight mouseRef={mouseRef} />
-      <GoldParticles />
-
-      {/* LANDING */}
-      <group visible={p < 0.10}>
-        <StoneSurface mouseRef={mouseRef} opacity={Math.max(0, 1 - (p - 0.06) / 0.04)} />
-      </group>
-
-      {/* WORLD 1 — RADHA KRISHNA */}
-      <group visible={inWorld(p,'radhakrishna')} position={[0,0,0]}>
-        <Suspense fallback={null}>
-          <SafeModel
-            url={URLS.radhakrishna}
-            scale={1.2}
-            position={[0,-1.5,0]}
-            opacity={worldOpacity(p,'radhakrishna')}
-            mouseRef={mouseRef}
-          />
-        </Suspense>
-        <pointLight color="#FFF5E0" intensity={2} distance={8} position={[0,4,2]} />
-        <pointLight color={GOLD} intensity={1} distance={6} position={[-3,0,2]} />
-      </group>
-
-      {/* WORLD 2 — WALL */}
-      <group visible={inWorld(p,'wall')} position={[0,0,0]}>
-        <Suspense fallback={null}>
-          <SafeModel
-            url={URLS.wall}
-            scale={1.5}
-            position={[0,-1,0]}
-            opacity={worldOpacity(p,'wall')}
-            mouseRef={mouseRef}
-          />
-        </Suspense>
-        <pointLight color="#FFF5E0" intensity={1.5} distance={7} position={[2,3,3]} />
-      </group>
-
-      {/* WORLD 3 — GANESHA */}
-      <group visible={inWorld(p,'ganesha')} position={[0,0,0]}>
-        <Suspense fallback={null}>
-          <Float speed={1.2} floatIntensity={0.3} rotationIntensity={0.05}>
-            <SafeModel
-              url={URLS.ganesha}
-              scale={1.4}
-              position={[0,-1.5,0]}
-              opacity={worldOpacity(p,'ganesha')}
-              mouseRef={mouseRef}
-            />
-          </Float>
-        </Suspense>
-        <pointLight color="#FFA040" intensity={2} distance={7} position={[0,3,2]} />
-        <pointLight color={GOLD} intensity={1} distance={5} position={[-2,0,2]} />
-      </group>
-
-      {/* WORLD 4 — BUDDHA */}
-      <group visible={inWorld(p,'buddha')} position={[0,0,0]}>
-        <Suspense fallback={null}>
-          <SafeModel
-            url={URLS.buddha}
-            scale={1.3}
-            position={[0,-1,0]}
-            opacity={worldOpacity(p,'buddha')}
-            mouseRef={mouseRef}
-            autoRotate
-          />
-        </Suspense>
-        <pointLight color="#FFF5D0" intensity={2} distance={8} position={[0,4,2]} />
-        <ambientLight color="#C4A057" intensity={0.2} />
-      </group>
-
-      {/* WORLD 5 — FOUNTAIN */}
-      <group visible={inWorld(p,'fountain')} position={[0,0,0]}>
-        <Suspense fallback={null}>
-          <Float speed={0.6} floatIntensity={0.15}>
-            <SafeModel
-              url={URLS.fountain}
-              scale={1.1}
-              position={[0,-2,0]}
-              opacity={worldOpacity(p,'fountain')}
-              mouseRef={mouseRef}
-              autoRotate
-            />
-          </Float>
-        </Suspense>
-        <pointLight color="#FFF8F0" intensity={2.5} distance={10} position={[0,5,2]} />
-        <pointLight color={GOLD} intensity={0.8} distance={6} position={[3,0,2]} />
-      </group>
-
-      {/* WORLD 6 — WORKSHOP */}
-      <group visible={inWorld(p,'workshop')}>
-        {/* Dark stone block */}
-        <mesh position={[0,-1,0]}>
-          <boxGeometry args={[1.8,1,1.2]} />
-          <meshStandardMaterial color="#3A3020" roughness={0.9} transparent opacity={worldOpacity(p,'workshop')} />
-        </mesh>
-        {/* Dramatic light shaft */}
-        <spotLight color="#FFF5D0" intensity={6} distance={12} angle={Math.PI/10} penumbra={0.6} position={[0,6,0]} castShadow />
-        <pointLight color={GOLD} intensity={0.4} distance={4} position={[-2,0,2]} />
-      </group>
-
-      {/* WORLD 7 — SIGNATURE */}
-      <group visible={inWorld(p,'signature')}>
-        <SignatureText scrollProgress={p} />
-        <pointLight color={GOLD} intensity={2} distance={8} position={[0,2,3]} />
-      </group>
-
-    </>
-  )
-}
-
-// ── TEXT OVERLAYS ─────────────────────────────────────────
-const TEXTS = [
-  { world:'radhakrishna', title:'The Sacred', body:'Crafted in white marble. Finished in gold.\nMade for homes that understand devotion.' },
-  { world:'wall',         title:'The Natural', body:'Stone shaped by hands that have spent\na lifetime learning how it breathes.' },
-  { world:'ganesha',      title:'The Divine',  body:'Every idol begins as a block of stone.\nIt ends as something sacred.' },
-  { world:'buddha',       title:'The Serene',  body:'Stillness carved in stone.\nFor gardens that outlast everything.' },
-  { world:'fountain',     title:'The Grand',   body:'Some commissions are not decorations.\nThey are destinations.' },
-  { world:'workshop',     title:'The Making',  body:'Every piece that leaves Kokapet began as a block of stone\nand ended as something no one else in the world has.' },
-]
-
-function TextOverlays({ scrollProgress: p }) {
-  return (
-    <>
-      {/* Landing */}
+      {/* Corridor carved text */}
       <AnimatePresence>
-        {p < 0.08 && (
+        {inCorridor && (
           <motion.div
-            key="landing"
-            initial={{ opacity:0 }}
-            animate={{ opacity:1 }}
-            exit={{ opacity:0 }}
-            style={{ position:'fixed', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', zIndex:50, pointerEvents:'none', textAlign:'center' }}
+            key="corridor-text"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              position: 'fixed', bottom: 80, left: 0, right: 0,
+              textAlign: 'center', zIndex: 50, pointerEvents: 'none',
+            }}
           >
-            <motion.h1
-              initial={{ opacity:0, y:30 }}
-              animate={{ opacity:1, y:0 }}
-              transition={{ delay:0.5, duration:1.5 }}
-              style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:'clamp(48px,7vw,88px)', fontWeight:300, color:SHADOW, lineHeight:1.05, letterSpacing:'0.04em' }}
-            >
-              UTSAV<br /><em style={{ color:GOLD }}>STONE ART</em>
-            </motion.h1>
-            <motion.p
-              initial={{ opacity:0 }}
-              animate={{ opacity:1 }}
-              transition={{ delay:1.2, duration:1 }}
-              style={{ fontFamily:"'Montserrat',sans-serif", fontSize:12, fontWeight:300, color:'#6B5A45', letterSpacing:'0.25em', textTransform:'uppercase', marginTop:20 }}
-            >
-              Kokapet, Hyderabad · Est. 2023 · 4.9 ★
-            </motion.p>
-            <motion.p
-              initial={{ opacity:0 }}
-              animate={{ opacity:1 }}
-              transition={{ delay:2, duration:1 }}
-              style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:16, fontStyle:'italic', color:'#9A8A78', marginTop:32 }}
-            >
-              Scroll to enter the stone.
-            </motion.p>
-            <motion.div
-              animate={{ scaleY:[0,1,0] }}
-              transition={{ duration:2, repeat:Infinity, ease:'easeInOut' }}
-              style={{ width:1, height:60, background:`linear-gradient(180deg,${GOLD},transparent)`, marginTop:40, transformOrigin:'top' }}
-            />
+            <p style={{
+              fontFamily: "'Cormorant Garamond', serif",
+              fontSize: 'clamp(13px, 1.8vw, 17px)',
+              fontWeight: 300,
+              color: 'rgba(196,160,87,0.8)',
+              letterSpacing: '0.3em',
+              textTransform: 'uppercase',
+            }}>
+              Kokapet, Hyderabad · Est. 2023 · 4.9 ★ · Crafted by hand. Built to last.
+            </p>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* World texts */}
-      {TEXTS.map(({ world, title, body }) => {
-        const op = worldOpacity(p, world, 0.04, 0.04)
-        return op > 0 ? (
-          <div
-            key={world}
+      {/* Hall doorway labels */}
+      <AnimatePresence>
+        {showDoors && (
+          <motion.div
+            key="hall-doors"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
             style={{
-              position:'fixed', left:60, bottom:80, zIndex:50, pointerEvents:'none',
-              opacity:op, transition:'opacity 0.3s',
-              maxWidth:480,
+              position: 'fixed', bottom: 60, left: 0, right: 0,
+              display: 'flex', justifyContent: 'center',
+              gap: 60, zIndex: 50,
             }}
           >
-            <div style={{ fontSize:9, fontWeight:700, letterSpacing:'0.25em', textTransform:'uppercase', color:GOLD, marginBottom:10, fontFamily:"'Montserrat',sans-serif" }}>
-              {title}
-            </div>
-            <p style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:'clamp(18px,2.2vw,26px)', fontStyle:'italic', fontWeight:300, color: world==='workshop' ? CREAM : SHADOW, lineHeight:1.65, whiteSpace:'pre-line' }}>
-              {body}
-            </p>
-          </div>
-        ) : null
-      })}
-
-      {/* Signature CTA */}
-      <AnimatePresence>
-        {p > 0.94 && (
-          <motion.div
-            key="cta"
-            initial={{ opacity:0, y:30 }}
-            animate={{ opacity:1, y:0 }}
-            exit={{ opacity:0 }}
-            style={{ position:'fixed', bottom:60, left:'50%', transform:'translateX(-50%)', zIndex:50, display:'flex', gap:16, flexWrap:'wrap', justifyContent:'center' }}
-          >
             {[
-              { label:'💬 WhatsApp Anup', href:'https://wa.me/919032463247' },
-              { label:'📍 Visit Kokapet', href:'https://maps.google.com/?q=Utsav+Stone+Art+Kokapet+Hyderabad' },
-              { label:'📞 090324 63247', href:'tel:09032463247' },
-            ].map(btn => (
-              <a key={btn.label} href={btn.href} target="_blank" rel="noreferrer"
-                style={{ padding:'14px 28px', border:`1px solid ${GOLD}`, color:GOLD, fontFamily:"'Montserrat',sans-serif", fontSize:11, fontWeight:600, letterSpacing:'0.15em', textTransform:'uppercase', textDecoration:'none', background:'rgba(28,18,8,0.8)', backdropFilter:'blur(8px)' }}
+              { label: 'For Your Home', sub: 'Mandirs & Idols', icon: '🙏' },
+              { label: 'For Your Space', sub: 'Wall Art & Elevations', icon: '🏛️' },
+              { label: 'For Your Project', sub: 'Commercial & Exterior', icon: '🌿' },
+            ].map((door, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.1 }}
+                style={{ textAlign: 'center', cursor: 'none' }}
               >
-                {btn.label}
-              </a>
+                <div style={{ fontSize: 20, marginBottom: 8 }}>{door.icon}</div>
+                <div style={{
+                  fontSize: 10, fontWeight: 700,
+                  letterSpacing: '0.15em', textTransform: 'uppercase',
+                  color: 'rgba(212,200,168,0.9)', marginBottom: 3,
+                }}>
+                  {door.label}
+                </div>
+                <div style={{
+                  fontSize: 9, color: 'rgba(212,200,168,0.55)',
+                  letterSpacing: '0.1em',
+                }}>
+                  {door.sub}
+                </div>
+              </motion.div>
             ))}
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Final carved line */}
+      {/* Scroll instruction */}
       <AnimatePresence>
-        {p > 0.97 && (
-          <motion.p
-            initial={{ opacity:0 }}
-            animate={{ opacity:1 }}
-            style={{ position:'fixed', bottom:20, left:'50%', transform:'translateX(-50%)', fontFamily:"'Cormorant Garamond',serif", fontSize:14, fontStyle:'italic', color:'rgba(196,160,87,0.6)', whiteSpace:'nowrap', zIndex:50, letterSpacing:'0.1em' }}
+        {scrollProgress < 0.08 && scrollProgress > 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              position: 'fixed', bottom: 50, right: 60,
+              zIndex: 50, pointerEvents: 'none',
+              display: 'flex', flexDirection: 'column',
+              alignItems: 'center', gap: 10,
+            }}
           >
-            Come see what stone can become.
-          </motion.p>
+            <motion.div
+              animate={{ scaleY: [0, 1, 0], originY: 0 }}
+              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+              style={{
+                width: 1, height: 60,
+                background: 'linear-gradient(180deg, #C4A057, transparent)',
+              }}
+            />
+            <p style={{
+              fontSize: 9, fontWeight: 700, letterSpacing: '0.2em',
+              textTransform: 'uppercase', color: '#9A8A78',
+              writingMode: 'vertical-rl',
+            }}>
+              Scroll
+            </p>
+          </motion.div>
         )}
       </AnimatePresence>
-
-      {/* Production X watermark */}
-      <div style={{ position:'fixed', top:40, right:40, zIndex:50, fontFamily:"'Montserrat',sans-serif", fontSize:9, fontWeight:600, letterSpacing:'0.18em', textTransform:'uppercase', color:'rgba(196,160,87,0.5)' }}>
-        Preview · Production X
-      </div>
-
-      {/* Scroll indicator */}
-      {p > 0.02 && p < 0.95 && (
-        <div style={{ position:'fixed', right:40, bottom:40, zIndex:50, fontFamily:"'Montserrat',sans-serif", fontSize:9, color:'rgba(196,160,87,0.5)', letterSpacing:'0.15em', textTransform:'uppercase' }}>
-          {Math.round(p * 100)}%
-        </div>
-      )}
     </>
   )
 }
 
-// ── LOADING SCREEN ────────────────────────────────────────
-function Loading() {
+// ─── SECTION: AUDIENCE ROOM ───────────────────────────────
+function AudienceSection({ id, bg, tag, headingHTML, quote, items, ctaText, ctaHref, reverse, Model }) {
+  const mouseRef = useMouse()
+
   return (
-    <div style={{ position:'fixed', inset:0, background:SAND, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', zIndex:9999 }}>
-      <motion.div
-        animate={{ scale:[1,1.12,1], opacity:[0.5,1,0.5] }}
-        transition={{ duration:2.5, repeat:Infinity }}
-        style={{ width:80, height:80, borderRadius:'50%', background:`radial-gradient(circle,${GOLD}55 0%,transparent 70%)`, marginBottom:32 }}
-      />
-      <p style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:22, fontWeight:300, color:SHADOW, letterSpacing:'0.08em' }}>
-        Entering the stone…
-      </p>
-    </div>
+    <section id={id} style={{
+      minHeight: '100vh',
+      background: bg,
+      display: 'flex',
+      alignItems: 'center',
+      padding: '100px 60px',
+      position: 'relative',
+      overflow: 'hidden',
+    }}>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: 80,
+        alignItems: 'center',
+        maxWidth: 1200,
+        margin: '0 auto',
+        width: '100%',
+        direction: reverse ? 'rtl' : 'ltr',
+      }}>
+        {/* 3D Canvas */}
+        <div style={{ height: 520, direction: 'ltr' }}>
+          <Canvas
+            shadows
+            camera={{ fov: 50, near: 0.1, far: 50, position: [0, 0.5, 5] }}
+            style={{ background: bg, borderRadius: 2 }}
+          >
+            <ambientLight color="#FFF8F0" intensity={0.5} />
+            <directionalLight color="#FFF5D0" intensity={1.2} position={[2, 5, 4]} castShadow />
+            <pointLight color="#C4A057" intensity={1} distance={8} position={[-2, 2, 3]} />
+            <Suspense fallback={null}>
+              <Model mouseRef={mouseRef} />
+            </Suspense>
+          </Canvas>
+        </div>
+
+        {/* Content */}
+        <div style={{ direction: 'ltr' }}>
+          <div style={S.eyebrow}>
+            <span style={{ display: 'inline-block', width: 24, height: 1, background: '#C4A057' }} />
+            {tag}
+          </div>
+          <h2
+            style={S.heading}
+            dangerouslySetInnerHTML={{ __html: headingHTML }}
+          />
+          <blockquote style={{
+            fontFamily: "'Cormorant Garamond', serif",
+            fontSize: 19,
+            fontStyle: 'italic',
+            fontWeight: 300,
+            color: '#6B5A45',
+            lineHeight: 1.65,
+            marginBottom: 32,
+            paddingLeft: 20,
+            borderLeft: '2px solid #C4A057',
+          }}>
+            {quote}
+          </blockquote>
+          <div style={{ marginBottom: 36 }}>
+            {items.map((item, i) => (
+              <div key={i} style={{ display: 'flex', gap: 14, marginBottom: 16 }}>
+                <div style={{
+                  width: 6, height: 6, background: '#C4A057',
+                  borderRadius: '50%', flexShrink: 0, marginTop: 7,
+                }} />
+                <div>
+                  <h4 style={{ fontSize: 12, fontWeight: 600, color: '#1C1612', marginBottom: 3 }}>
+                    {item.title}
+                  </h4>
+                  <p style={{ fontSize: 11, color: '#9A8A78', lineHeight: 1.75 }}>
+                    {item.desc}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <a
+            href={ctaHref}
+            target="_blank"
+            rel="noreferrer"
+            data-cursor
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 10,
+              padding: '15px 34px',
+              background: '#1C1612', color: '#FAF6F0',
+              fontSize: 11, fontWeight: 600, letterSpacing: '0.15em',
+              textTransform: 'uppercase', textDecoration: 'none',
+              transition: 'all 0.3s', cursor: 'none',
+            }}
+          >
+            {ctaText}
+          </a>
+        </div>
+      </div>
+    </section>
   )
 }
 
-// ── ROOT APP ──────────────────────────────────────────────
-export default function App() {
-  const [ready,          setReady]   = useState(false)
-  const [scrollProgress, setScroll]  = useState(0)
-  const mouseRef = useRef({ nx:0, ny:0 })
-
-  // Track scroll
-  useEffect(() => {
-    const onScroll = () => {
-      const el  = document.documentElement
-      const max = el.scrollHeight - window.innerHeight
-      setScroll(max > 0 ? window.scrollY / max : 0)
-    }
-    window.addEventListener('scroll', onScroll, { passive:true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
-
-  // Track mouse (normalized -1 to 1)
-  useEffect(() => {
-    const onMove = e => {
-      mouseRef.current.nx = (e.clientX / window.innerWidth  - 0.5) * 2
-      mouseRef.current.ny = -(e.clientY / window.innerHeight - 0.5) * 2
-    }
-    window.addEventListener('mousemove', onMove)
-    return () => window.removeEventListener('mousemove', onMove)
-  }, [])
-
-  // Scene bg color based on world
-  const p = scrollProgress
-  const bgColor = p > 0.76 && p < 0.88 ? '#0D0A06' : SAND
-
+// ─── WORKSHOP SECTION ────────────────────────────────────
+function WorkshopSection() {
   return (
-    <>
-      <Cursor />
-
-      {!ready && <Loading />}
-
-      {/* Fixed 3D Canvas */}
-      <div style={{ position:'fixed', inset:0, zIndex:1 }}>
+    <section style={{
+      minHeight: '80vh', background: '#1C1612',
+      position: 'relative', overflow: 'hidden',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: '100px 60px',
+    }}>
+      <div style={{ position: 'absolute', inset: 0, zIndex: 1 }}>
         <Canvas
-          shadows
-          camera={{ fov:55, near:0.1, far:100, position:[0,0.5,6] }}
-          gl={{ antialias:true, alpha:false }}
-          style={{ background:bgColor, transition:'background 1s' }}
-          onCreated={() => setTimeout(() => setReady(true), 800)}
+          camera={{ fov: 50, near: 0.1, far: 50, position: [0, 0.5, 5] }}
+          style={{ background: '#0D0A06' }}
         >
           <Suspense fallback={null}>
-            <Scene scrollProgress={p} mouseRef={mouseRef} />
+            <WorkshopScene />
           </Suspense>
         </Canvas>
       </div>
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        transition={{ duration: 1.2 }}
+        viewport={{ once: true }}
+        style={{
+          position: 'relative', zIndex: 2,
+          maxWidth: 700, textAlign: 'center',
+        }}
+      >
+        <p style={{
+          fontFamily: "'Cormorant Garamond', serif",
+          fontSize: 'clamp(20px, 2.8vw, 32px)',
+          fontStyle: 'italic', fontWeight: 300,
+          color: '#FAF6F0', lineHeight: 1.75,
+          marginBottom: 40,
+        }}>
+          "Every piece that leaves our studio in Kokapet began as a raw block of stone.
+          It was cut, carved, shaped and finished by hands that have spent years learning
+          how stone behaves — how it takes light, how it holds a line, how it can be made
+          to feel both ancient and completely new. We do not have a catalogue.
+          We have conversations. Then we begin."
+        </p>
+        <motion.div
+          initial={{ scaleX: 0 }}
+          whileInView={{ scaleX: 1 }}
+          transition={{ duration: 0.8, delay: 0.4 }}
+          style={{ width: 60, height: 1, background: '#C4A057', margin: '0 auto' }}
+        />
+      </motion.div>
+    </section>
+  )
+}
 
-      {/* Scroll container — drives camera via scroll */}
-      <div style={{ height:'800vh', position:'relative', zIndex:0 }} />
+// ─── EXIT SECTION ────────────────────────────────────────
+function ExitSection() {
+  return (
+    <section style={{
+      minHeight: '100vh', background: '#FAF6F0',
+      display: 'flex', alignItems: 'center',
+      justifyContent: 'center',
+      padding: '100px 60px',
+      position: 'relative', overflow: 'hidden',
+    }}>
+      {/* Subtle background glow */}
+      <div style={{
+        position: 'absolute', inset: 0,
+        background: 'radial-gradient(ellipse 60% 60% at 50% 50%, rgba(196,160,87,0.07) 0%, transparent 70%)',
+        pointerEvents: 'none',
+      }} />
 
-      {/* HTML overlays */}
-      <TextOverlays scrollProgress={p} />
-
-      {/* WhatsApp float */}
-      {p > 0.08 && (
-        <a href="https://wa.me/919032463247" target="_blank" rel="noreferrer"
-          style={{ position:'fixed', bottom:32, right:32, zIndex:1000, width:56, height:56, background:'#25D366', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:24, textDecoration:'none', boxShadow:'0 4px 24px rgba(37,211,102,0.4)' }}
+      <div style={{ textAlign: 'center', maxWidth: 640, position: 'relative', zIndex: 1 }}>
+        <motion.div
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          style={{
+            fontSize: 9, fontWeight: 700,
+            letterSpacing: '0.25em', textTransform: 'uppercase',
+            color: '#C4A057', marginBottom: 24,
+          }}
         >
-          💬
-        </a>
+          Come see it in person
+        </motion.div>
+
+        <motion.h2
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.2 }}
+          style={{
+            fontFamily: "'Cormorant Garamond', serif",
+            fontSize: 'clamp(44px, 6vw, 80px)',
+            fontWeight: 300, lineHeight: 1.05,
+            color: '#1C1612', marginBottom: 20,
+          }}
+        >
+          You have seen<br />
+          what stone <em style={{ color: '#C4A057' }}>can become.</em>
+        </motion.h2>
+
+        <motion.p
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.4 }}
+          style={{ ...S.sub, margin: '0 auto 56px', textAlign: 'center' }}
+        >
+          Now imagine it in your home, your temple, your space.
+          Visit our studio in Kokapet — bring your vision. We will take it from there.
+        </motion.p>
+
+        {/* Three doors */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.5 }}
+          style={{ display: 'flex', gap: 20, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 64 }}
+        >
+          {[
+            { icon: '💬', title: 'WhatsApp Anup', sub: 'Start a conversation', href: 'https://wa.me/919032463247' },
+            { icon: '📞', title: 'Call the Studio', sub: '090324 63247', href: 'tel:09032463247' },
+            { icon: '📍', title: 'Visit Us', sub: 'Kokapet, Gandipet', href: '#' },
+          ].map((door, i) => (
+            <motion.a
+              key={i}
+              href={door.href}
+              whileHover={{ background: '#1C1612', borderColor: '#1C1612' }}
+              data-cursor
+              style={{
+                display: 'flex', flexDirection: 'column',
+                alignItems: 'center', gap: 12,
+                padding: '32px 40px',
+                border: '1px solid rgba(196,160,87,0.3)',
+                background: 'transparent',
+                textDecoration: 'none', minWidth: 180,
+                transition: 'all 0.4s', cursor: 'none',
+              }}
+            >
+              <span style={{ fontSize: 36 }}>{door.icon}</span>
+              <span style={{
+                fontFamily: "'Cormorant Garamond', serif",
+                fontSize: 20, fontWeight: 600, color: '#1C1612',
+              }}>
+                {door.title}
+              </span>
+              <span style={{ fontSize: 10, color: '#9A8A78', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                {door.sub}
+              </span>
+            </motion.a>
+          ))}
+        </motion.div>
+
+        {/* Info strip */}
+        <div style={{
+          display: 'flex', gap: 48, justifyContent: 'center',
+          flexWrap: 'wrap', paddingTop: 48,
+          borderTop: '1px solid rgba(196,160,87,0.2)',
+        }}>
+          {[
+            { label: 'Address', value: 'Beside Tasca Bar & Kitchen\nKokapet, Gandipet\nHyderabad 500075' },
+            { label: 'Hours', value: 'Open Daily\n10:00 AM – 8:00 PM\nSunday included' },
+            { label: 'Find Us', value: '⭐ 4.9 / 5 Stars\n84 Google Reviews\n@utsav_stoneart' },
+          ].map((info, i) => (
+            <div key={i} style={{ textAlign: 'center' }}>
+              <div style={{
+                fontSize: 10, fontWeight: 700, letterSpacing: '0.15em',
+                textTransform: 'uppercase', color: '#1C1612', marginBottom: 10,
+              }}>
+                {info.label}
+              </div>
+              <div style={{ fontSize: 12, color: '#9A8A78', lineHeight: 1.9, whiteSpace: 'pre-line' }}>
+                {info.value}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ─── FOOTER ───────────────────────────────────────────────
+function Footer() {
+  return (
+    <footer style={{ background: '#0D0A06', padding: '60px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto', display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 60, marginBottom: 40 }}>
+        <div>
+          <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 26, fontWeight: 600, color: '#FAF6F0', marginBottom: 4 }}>
+            Utsav Stone Art
+          </div>
+          <div style={{ fontSize: 10, color: '#C4A057', letterSpacing: '0.12em', marginBottom: 16 }}>
+            A Place for Everything to Décor
+          </div>
+          <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', lineHeight: 1.8, marginBottom: 24 }}>
+            Hand and machine-crafted marble, granite and sandstone. Serving Hyderabad and Telangana with devotion since 2023.
+          </p>
+          <div style={{ display: 'flex', gap: 10 }}>
+            {['📸', '💬', '📌'].map((icon, i) => (
+              <a key={i} href="#" data-cursor style={{
+                width: 36, height: 36, border: '1px solid rgba(255,255,255,0.1)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 14, cursor: 'none', textDecoration: 'none',
+                color: 'rgba(255,255,255,0.4)', transition: 'all 0.3s',
+              }}>
+                {icon}
+              </a>
+            ))}
+          </div>
+        </div>
+        {[
+          { title: 'Collections', links: ['Pooja Mandirs', 'Deity Sculptures', 'Wall Elevations', 'Garden Structures', 'Custom Wall Art'] },
+          { title: 'Studio', links: ['About Us', 'Our Work', 'Process', 'Reviews', 'Contact'] },
+          { title: 'Contact', links: ['090324 63247', 'WhatsApp Us', 'Get Directions', '@utsav_stoneart'] },
+        ].map((col, i) => (
+          <div key={i}>
+            <h4 style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', marginBottom: 18 }}>
+              {col.title}
+            </h4>
+            <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {col.links.map((link, j) => (
+                <li key={j}>
+                  <a href="#" style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', textDecoration: 'none' }}>
+                    {link}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+      <div style={{
+        maxWidth: 1200, margin: '0 auto',
+        paddingTop: 28, borderTop: '1px solid rgba(255,255,255,0.06)',
+        display: 'flex', justifyContent: 'space-between',
+        fontSize: 10, color: 'rgba(255,255,255,0.2)',
+      }}>
+        <span>© 2026 Utsav Stone Art, Kokapet, Hyderabad.</span>
+        <span>Website by <a href="https://productionx.in" style={{ color: '#C4A057', textDecoration: 'none' }}>Production X</a> · Every frame earns its place.</span>
+      </div>
+    </footer>
+  )
+}
+
+// ─── MAIN NAV ────────────────────────────────────────────
+function Nav({ visible }) {
+  const [scrolled, setScrolled] = useState(false)
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 80)
+    window.addEventListener('scroll', onScroll)
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
+  if (!visible) return null
+
+  return (
+    <nav style={{
+      position: 'fixed',
+      top: 32, left: 0, right: 0,
+      zIndex: 1000,
+      padding: scrolled ? '13px 60px' : '20px 60px',
+      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      background: scrolled ? 'rgba(250,246,240,0.96)' : 'transparent',
+      backdropFilter: scrolled ? 'blur(20px)' : 'none',
+      borderBottom: scrolled ? '1px solid rgba(196,160,87,0.2)' : 'none',
+      transition: 'all 0.4s',
+    }}>
+      <a href="#" style={{
+        fontFamily: "'Cormorant Garamond', serif",
+        fontSize: 20, fontWeight: 600,
+        color: scrolled ? '#1C1612' : '#FAF6F0',
+        textDecoration: 'none',
+        transition: 'color 0.4s',
+        cursor: 'none',
+      }}>
+        Utsav <span style={{ color: '#C4A057' }}>Stone Art</span>
+      </a>
+      <ul style={{ display: 'flex', gap: 32, listStyle: 'none' }}>
+        {['Home & Temple', 'Wall & Interior', 'Commercial', 'Contact'].map((item, i) => (
+          <li key={i}>
+            <a href="#" data-cursor style={{
+              fontSize: 10, fontWeight: 500,
+              letterSpacing: '0.14em', textTransform: 'uppercase',
+              color: scrolled ? '#9A8A78' : 'rgba(250,246,240,0.7)',
+              textDecoration: 'none', cursor: 'none',
+              transition: 'color 0.3s',
+            }}>
+              {item}
+            </a>
+          </li>
+        ))}
+      </ul>
+      <a href="https://wa.me/919032463247" data-cursor target="_blank" rel="noreferrer" style={{
+        background: '#1C1612', color: '#FAF6F0',
+        padding: '11px 24px', fontSize: 10,
+        fontWeight: 600, letterSpacing: '0.14em',
+        textTransform: 'uppercase', textDecoration: 'none',
+        cursor: 'none', transition: 'all 0.3s',
+      }}>
+        Get a Quote
+      </a>
+    </nav>
+  )
+}
+
+// ─── ROOT APP ─────────────────────────────────────────────
+export default function App() {
+  const [phase, setPhase] = useState('prologue') // prologue | crack | journey | site
+  const scrollProgress = useScrollProgress()
+  const mouseRef = useMouse()
+
+  // Total scroll height for journey section
+  const journeyHeight = '600vh' // 6 screens of scroll for corridor
+
+  return (
+    <>
+      <DemoBanner />
+      <Cursor />
+
+      {/* ── PHASE: PROLOGUE ── */}
+      <AnimatePresence>
+        {phase === 'prologue' && (
+          <Prologue onEnter={() => setPhase('crack')} />
+        )}
+      </AnimatePresence>
+
+      {/* ── PHASE: CRACK ── */}
+      <AnimatePresence>
+        {phase === 'crack' && (
+          <CrackScreen onShatter={() => setPhase('journey')} />
+        )}
+      </AnimatePresence>
+
+      {/* ── PHASE: JOURNEY ── */}
+      {phase === 'journey' && (
+        <>
+          {/* Fixed 3D canvas */}
+          <JourneyCanvas scrollProgress={scrollProgress} mouseRef={mouseRef} />
+
+          {/* Scroll overlays */}
+          <ScrollOverlays scrollProgress={scrollProgress} />
+
+          {/* Skip button */}
+          <motion.button
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1 }}
+            onClick={() => setPhase('site')}
+            style={{
+              position: 'fixed', top: 60, right: 40, zIndex: 200,
+              background: 'transparent',
+              border: '1px solid rgba(196,160,87,0.3)',
+              color: '#C4A057',
+              fontFamily: "'Montserrat', sans-serif",
+              fontSize: 10, fontWeight: 600,
+              letterSpacing: '0.15em', textTransform: 'uppercase',
+              padding: '8px 18px', cursor: 'none',
+            }}
+          >
+            Skip Experience →
+          </motion.button>
+
+          {/* Tall scroll container to drive camera */}
+          <div style={{ height: journeyHeight, position: 'relative', zIndex: 0 }} />
+
+          {/* When scrolled far enough, auto-advance */}
+          {scrollProgress > 0.9 && (() => {
+            setTimeout(() => setPhase('site'), 800)
+            return null
+          })()}
+        </>
       )}
+
+      {/* ── PHASE: MAIN SITE ── */}
+      <AnimatePresence>
+        {phase === 'site' && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 1 }}
+          >
+            <Nav visible />
+
+            {/* WhatsApp float */}
+            <a href="https://wa.me/919032463247" target="_blank" rel="noreferrer" data-cursor
+              style={{
+                position: 'fixed', bottom: 32, right: 32, zIndex: 1000,
+                width: 56, height: 56, background: '#25D366',
+                borderRadius: '50%', display: 'flex',
+                alignItems: 'center', justifyContent: 'center',
+                fontSize: 24, textDecoration: 'none', cursor: 'none',
+                boxShadow: '0 4px 24px rgba(37,211,102,0.35)',
+              }}
+            >
+              💬
+            </a>
+
+            {/* Audience Sections */}
+            <AudienceSection
+              id="home-room"
+              bg="#FAF6F0"
+              tag="For Your Home"
+              headingHTML="Where your home<br/>becomes a <em style='font-style:italic;color:#C4A057'>temple.</em>"
+              quote="A Pooja mandir is not furniture. It is the soul of your home. It deserves to be made like one."
+              items={[
+                { title: 'Pooja Mandirs', desc: 'Carving mandirs, Jali work, Meenakari, MOP work — crafted to become the centrepiece of your home for generations.' },
+                { title: 'Deity Sculptures', desc: 'White marble Ganesha, Radha Krishna and other idols — hand finished with gold detailing, made to your exact dimensions.' },
+                { title: 'Wall Murals', desc: 'Sandstone and marble wall art — sacred motifs and decorative panels that transform ordinary walls into art.' },
+              ]}
+              ctaText="💬 WhatsApp Anup to Begin Yours"
+              ctaHref="https://wa.me/919032463247"
+              Model={(props) => <MandirModel position={[0, 0, 0]} scale={0.7} {...props} />}
+            />
+
+            <AudienceSection
+              id="space-room"
+              bg="#F2EAE0"
+              tag="For Your Space"
+              headingHTML="The wall that makes<br/>everything else <em style='font-style:italic;color:#C4A057'>make sense.</em>"
+              quote="Great interiors are composed — around one piece that sets the tone for everything else."
+              items={[
+                { title: 'Wall Elevations', desc: 'Stone relief panels and cladding that transform a living room, lobby or entrance into something architectural.' },
+                { title: 'Custom Wall Art', desc: 'Bespoke carved stone artwork — designed around your space, your taste and the story you want your home to tell.' },
+                { title: 'Flooring & Mosaics', desc: 'Stone flooring, mosaic inlays and entrance patterns — surfaces that ground a space with permanence.' },
+              ]}
+              ctaText="Send Your Brief →"
+              ctaHref="https://wa.me/919032463247"
+              reverse
+              Model={(props) => <WallPanel position={[0, 0, 0]} scale={0.65} {...props} />}
+            />
+
+            <AudienceSection
+              id="project-room"
+              bg="#E8D9C4"
+              tag="For Your Project"
+              headingHTML="Built to outlast<br/>the <strong style='font-weight:600'>building</strong> <em style='font-style:italic;color:#C4A057'>it stands in.</em>"
+              quote="Builders, architects and interior designers across Hyderabad trust us for one reason — we deliver exactly what we promise."
+              items={[
+                { title: 'Garden & Exterior Structures', desc: 'Stone gazebos, fountains, columns and garden sculptures — permanent features for premium spaces.' },
+                { title: 'Staircase & Facade Cladding', desc: 'Marble and granite cladding that elevates the architectural character of any building.' },
+                { title: 'Scale Capability', desc: 'From single residences to large commercial commissions — we handle the full scope with on-site installation.' },
+              ]}
+              ctaText="Discuss Your Project"
+              ctaHref="https://wa.me/919032463247"
+              Model={(props) => <ColumnModel position={[0, -0.5, 0]} scale={0.72} {...props} />}
+            />
+
+            <WorkshopSection />
+            <ExitSection />
+            <Footer />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   )
 }
